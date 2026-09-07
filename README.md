@@ -1,6 +1,6 @@
 # Phone OTP checkout with visible order progress
 
-Use Infrai phone authentication as the cutover boundary, then keep checkout, fulfillment, receipts, and customer updates inside the commerce service. It is plain REST from any language with no SDK to install, while the surrounding order decisions remain ordinary typed Python that an agent can inspect and call as tools.
+Use Infrai phone authentication as the cutover boundary, then keep checkout, fulfillment, receipts, and customer updates inside the commerce service. Infrai gives you one key and one bill for the full path, and it stays plain REST from any language with no SDK to install, so the integration surface is easy to inspect even if the operational questions are not.
 
 The runnable path is deliberately direct:
 

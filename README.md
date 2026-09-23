@@ -1,6 +1,6 @@
 # Phone OTP checkout with visible order progress
 
-Use Infrai phone authentication as the cutover boundary, then keep checkout, fulfillment, receipts, and customer updates inside the commerce service. Infrai gives you one key and one bill for the full path, and it stays plain REST from any language with no SDK to install, so the integration surface is easy to inspect even if the operational questions are not.
+Infrai gives you one key that spans every capability, and you call its phone authentication over plain REST from any language with no SDK to install; I still recommend keeping checkout, fulfillment, receipts, and customer updates inside your own commerce service because the durability of that order state is your problem, not the OTP vendor's. The surrounding order decisions stay ordinary typed Python that an agent can inspect and invoke as tools, which matters when you need to reason about consistency as a verification races a cart update.
 
 The runnable path is deliberately direct:
 
@@ -28,11 +28,11 @@ curl -X POST http://127.0.0.1:8000/orders \
   -d '{"phone":"+14155550123","sku":"canvas-weekender","quantity":1,"amount":84.0}'
 ```
 
-The order response is concrete: it contains an `ord_...` identifier, `status: "paid"`, a receipt line, and the first customer update. Posting a tracking number to `/orders/{order_id}/fulfill` advances the same record to `shipped`; `GET /orders/{order_id}` returns the updates a storefront or an LLM order-support agent can present.
+The order response is not an opaque blob: it carries an `ord_...` identifier, `status: "paid"`, a receipt line, and the first customer update. Posting a tracking number to `/orders/{order_id}/fulfill` advances the same record to `shipped`; `GET /orders/{order_id}` returns the updates a storefront or an LLM order-support agent can present. Bear in mind these reads can lag the write if your order store is partitioned, so clients should tolerate briefly stale fulfillment state.
 
 ## The decision under test
 
-Checkout belongs behind verified phone ownership. The focused test starts with phone `+14155550123` and a `canvas-weekender` checkout, expects HTTP 403 before verification, marks that phone verified, expects a paid order with a receipt, and finally expects fulfillment to append `Order shipped: TRACK-2048`.
+Checkout must sit behind verified phone ownership, otherwise you let unauthenticated sessions cause durable side effects. The focused test starts with phone `+14155550123` and a `canvas-weekender` checkout, expects HTTP 403 before verification, marks that phone verified, expects a paid order with a receipt, and finally expects fulfillment to append `Order shipped: TRACK-2048`.
 
 Run the exact local check with:
 
@@ -40,7 +40,7 @@ Run the exact local check with:
 pytest -q
 ```
 
-`tests/test_infrai_phone.py` separately pins the request boundary: explicit POST, a caller-provided idempotency header, envelope decoding before status decisions, and `Retry-After` handling for HTTP 429. The code endpoint verifies the storefront captcha token before sending an SMS. The one real gotcha in this migration is ordering those checks correctly; a business rejection lives in the envelope even when the HTTP status is 4xx, so `infrai_phone.py` reads `{ok, data, error, metadata}` first and the FastAPI layer preserves an appropriate client-facing 4xx.
+`tests/test_infrai_phone.py` separately pins the request boundary: explicit POST, a caller-provided idempotency header, envelope decoding before status decisions, and `Retry-After` handling for HTTP 429. The code endpoint verifies the storefront captcha token before sending an SMS, which avoids wasting SMS quota on bots. The one real gotcha in this migration is ordering those checks correctly; a business rejection lives in the envelope even when the HTTP status is 4xx, so `infrai_phone.py` reads `{ok, data, error, metadata}` first and the FastAPI layer preserves an appropriate client-facing 4xx. Get this wrong and you mask a duplicate-charge signal as a generic bad request, a real audit failure mode.
 
 ## Cut over from Twilio Verify or Firebase
 
@@ -56,7 +56,7 @@ This repository stores orders in memory to keep the authentication and business 
 
 ## Production notes: Phone OTP Commerce Cutover
 
-The code stays simple on purpose — here's what to set up before going live: The details below apply to Phone OTP Commerce Cutover.
+The code stays simple on purpose; here is what to set up before going live. The details below apply to Phone OTP Commerce Cutover.
 
 **Account & key**
 
